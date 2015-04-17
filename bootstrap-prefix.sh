@@ -488,7 +488,7 @@ bootstrap_portage() {
 
 	if [[ -s ${PORTDIR}/profiles/repo_name ]]; then
 		# sync portage's repos.conf with the tree being used
-		sed -i -e "s,gentoo_prefix,$(<"${PORTDIR}"/profiles/repo_name)," "${ROOT}"/tmp/usr/share/portage/config/repos.conf || return 1
+		sed -i -e "s,chisel,$(<"${PORTDIR}"/profiles/repo_name)," "${ROOT}"/tmp/usr/share/portage/config/repos.conf || return 1
 	fi
 
 	einfo "${A%-*} successfully bootstrapped"
@@ -1022,6 +1022,18 @@ bootstrap_stage3() {
 		rm -rf "${ROOT}"/tmp
 		mkdir "${ROOT}"/tmp
 	fi
+
+        # This probably isn't the right place to do this, but for now
+        # I'm just going to install a hard-coded repos.conf here.
+        cat > ${ROOT}/usr/share/portage/config/repos.conf <<EOF
+[DEFAULT]
+main-repo = chisel
+
+[chisel]
+location = ${ROOT}/usr/portage
+sync-type = rsync
+sync-uri = rsync://rsync-sf.dabbelt.com/chisel-overlay
+EOF
 
 #	# Portage should figure out itself what it needs to do, if anything
 #	USE="-git" emerge -u system || return 1
