@@ -1334,7 +1334,6 @@ EOF
 		LD_LIBRARY_PATH \
 		LIBPATH \
 		PERL_MM_OPT \
-		PKG_CONFIG_PATH \
 		PYTHONPATH \
 	; do
 		# starting on purpose a shell here iso ${!flag} because I want
@@ -2158,20 +2157,6 @@ TODO=${2}
 if [[ ${TODO} != "noninteractive" && $(type -t bootstrap_${TODO}) != "function" ]];
 then
 	eerror "bootstrap target ${TODO} unknown"
-	exit 1
-fi
-
-if [[ -n ${LD_LIBARY_PATH} || -n ${DYLD_LIBRARY_PATH} ]] ; then
-	eerror "EEEEEK!  You have LD_LIBRARY_PATH or DYLD_LIBRARY_PATH set"
-	eerror "in your environment.  This is a guarantee for TROUBLE."
-	eerror "Cowardly refusing to operate any further this way!"
-	exit 1
-fi
-
-if [[ -n ${PKG_CONFIG_PATH} ]] ; then
-	eerror "YUK!  You have PKG_CONFIG_PATH set in your environment."
-	eerror "This is a guarantee for TROUBLE."
-	eerror "Cowardly refusing to operate any further this way!"
 	exit 1
 fi
 
