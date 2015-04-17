@@ -1,4 +1,6 @@
 Installation
 ============
 
+````
 $ ./bootstrap-prefix.sh
+````
