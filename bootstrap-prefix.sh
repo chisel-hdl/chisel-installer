@@ -193,6 +193,7 @@ bootstrap_setup() {
 			echo 'CXXFLAGS="${CFLAGS}"'
 			echo "MAKEOPTS=\"${MAKEOPTS}\""
 			echo "CONFIG_SHELL=\"${ROOT}/bin/bash\""
+                        echo "PYTHON_TARGETS=\"python2_7\""
 			if [[ -n ${PREFIX_DISABLE_USR_SPLIT} ]] ; then
 				echo "# be careful with this one, don't just remove it!"
 				echo "PREFIX_DISABLE_GEN_USR_LDSCRIPT=yes"
@@ -1009,7 +1010,6 @@ bootstrap_stage3() {
                 app-admin/eselect
                 app-admin/eselect-python
                 dev-lang/python:2.7
-                dev-lang/python:3.3
 		sys-apps/portage
 	)
 	emerge_pkgs "" "${pkgs[@]}" || return 1
