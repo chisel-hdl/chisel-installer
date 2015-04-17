@@ -1058,7 +1058,6 @@ bootstrap_interactive() {
 						# since Natty (11.04) that noone really wants,
 						# and certainly not upstream.  Some details:
 						# https://bugs.launchpad.net/ubuntu/+source/binutils/+bug/738098
-						toolchain_impossible="Ubuntu >= 11.04 (Natty)"
 						;;
 				esac
 			fi
