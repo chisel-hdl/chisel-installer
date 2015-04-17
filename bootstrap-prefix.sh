@@ -370,11 +370,11 @@ do_tree() {
 }
 
 bootstrap_tree() {
-	local PV="20141125"
+	local PV="20150516"
 	if [[ -n ${LATEST_TREE_YES} ]]; then
 		do_tree "${SNAPSHOT_URL}" portage-latest.tar.bz2
 	else
-		do_tree http://dev.gentoo.org/~redlizard/distfiles prefix-overlay-${PV}.tar.bz2
+		do_tree http://www.dabbelt.com/~palmer chisel-overlay-${PV}.tar.bz2
 	fi
 }
 
@@ -390,7 +390,7 @@ bootstrap_startscript() {
 	fi
 	einfo "Trying to emerge the shell you use, if necessary by running:"
 	einfo "emerge -u ${theshell}"
-	if ! emerge -u ${theshell} ; then
+	if ! true ; then
 		eerror "Your shell is not available in portage, hence we cannot" > /dev/stderr
 		eerror "automate starting your prefix, set SHELL and rerun this script" > /dev/stderr
 		return 1
@@ -887,67 +887,12 @@ bootstrap_bzip2() {
 	einfo "${A%-*} successfully bootstrapped"
 }
 
-bootstrap_stage1() { (
-	# NOTE: stage1 compiles all tools (no libraries) in the native
-	# bits-size of the compiler, which needs not to match what we're
-	# bootstrapping for.  This is no problem since they're just tools,
-	# for which it really doesn't matter how they run, as long AS they
-	# run.  For libraries, this is different, since they are relied on
-	# by packages we emerge lateron.
-	# Changing this to compile the tools for the bits the bootstrap is
-	# for, is a BAD idea, since we're extremely fragile here, so
-	# whatever the native toolchain is here, is what in general works
-	# best.
+bootstrap_stage1() {
+        ([[ $(bash --version 2>&1) == "GNU bash, version 4."[123456789]* && ${CHOST} != *-aix* ]] \
+               || [[ -x ${ROOT}/tmp/usr/bin/bash ]] \
+               || (bootstrap_bash) || return 1
 
-	configure_toolchain
-	export CC CXX
-
-	# run all bootstrap_* commands in a subshell since the targets
-	# frequently pollute the environment using exports which affect
-	# packages following (e.g. zlib builds 64-bits)
-
-	# don't rely on $MAKE, if make == gmake packages that call 'make' fail
-	[[ $(make --version 2>&1) == *GNU* ]] || (bootstrap_make) || return 1
-	[[ ${OFFLINE_MODE} ]] || type -P wget > /dev/null || (bootstrap_wget) || return 1
-	[[ $(sed --version 2>&1) == *GNU* ]] || (bootstrap_sed) || return 1
-	[[ $(m4 --version 2>&1) == *GNU*1.4.1?* ]] || (bootstrap_m4) || return 1
-	[[ $(bison --version 2>&1) == *"(GNU Bison) 2."[345678]* ]] \
-		|| [[ -x ${ROOT}/tmp/usr/bin/bison ]] \
-		|| (bootstrap_bison) || return 1
-	[[ $(uniq --version 2>&1) == *"(GNU coreutils) "[6789]* ]] \
-		|| (bootstrap_coreutils) || return 1
-	[[ $(find --version 2>&1) == *GNU* ]] || (bootstrap_findutils) || return 1
-	[[ $(tar --version 2>&1) == *GNU* ]] || (bootstrap_tar) || return 1
-	[[ $(patch --version 2>&1) == *GNU* ]] || (bootstrap_patch) || return 1
-	[[ $(grep --version 2>&1) == *GNU* ]] || (bootstrap_grep) || return 1
-	[[ $(awk --version < /dev/null 2>&1) == *GNU* ]] || bootstrap_gawk || return 1
-	[[ $(bash --version 2>&1) == "GNU bash, version 4."[123456789]* && ${CHOST} != *-aix* ]] \
-		|| [[ -x ${ROOT}/tmp/usr/bin/bash ]] \
-		|| (bootstrap_bash) || return 1
-	type -P bzip2 > /dev/null || (bootstrap_bzip2) || return 1
-	case ${CHOST} in
-		*-*-aix*)
-			# sys-devel/native-cctools installs the wrapper below,
-			# but we need it early or gmp breaks
-			{
-				echo '#!/bin/sh'
-				echo 'test ${#TMPDIR} -le 85 || TMPDIR=/tmp export TMPDIR'
-				echo 'exec /usr/ccs/bin/nm ${1+"$@"}'
-			} > "${ROOT}"/tmp/usr/bin/nm
-			chmod 755 "${ROOT}"/tmp/usr/bin/nm
-			;;
-	esac
-	# important to have our own (non-flawed one) since Python (from
-	# Portage) and binutils use it
-	for zlib in ${ROOT}/tmp/usr/lib/libz.* ; do
-		[[ -e ${zlib} ]] && break
-		zlib=
-	done
-	[[ -n ${zlib} ]] || (bootstrap_zlib) || return 1
-	# too vital to rely on a host-provided one
-	[[ -x ${ROOT}/tmp/usr/bin/python ]] || (bootstrap_python) || return 1
-
-
+                      
 	# checks itself if things need to be done still
 	(bootstrap_tree) || return 1
 
@@ -1016,12 +961,7 @@ bootstrap_stage2() {
 		return 1
 	fi
 
-	# Find out what toolchain packages we need, and configure LDFLAGS
-	# and friends.
-	configure_toolchain || return 1
-	configure_cflags || return 1
-	export CONFIG_SHELL="${ROOT}"/tmp/bin/bash
-	export CC CXX
+        export CONFIG_SHELL="${ROOT}"/tmp/bin/bash
 
 	emerge_pkgs() {
 		EPREFIX="${ROOT}"/tmp \
@@ -1029,56 +969,12 @@ bootstrap_stage2() {
 		do_emerge_pkgs "$@"
 	}
 
-	# bison's configure checks for perl, but doesn't use it,
-	# except for tests.  Since we don't want to pull in perl at this
-	# stage, fake it
-	export PERL=$(which touch)
-	# GCC sometimes decides that it needs to run makeinfo to update some
-	# info pages from .texi files.  Obviously we don't care at this
-	# stage and rather have it continue instead of abort the build
-	export MAKEINFO="echo makeinfo GNU texinfo 4.13"
+        pkgs=(
+            app-shells/bash
+        )
 
-	# Build a basic compiler and portage dependencies in $ROOT/tmp.
-	pkgs=(
-		$([[ ${CHOST} == *-aix* ]] && echo dev-libs/libiconv ) # bash dependency
-		sys-libs/ncurses
-		sys-libs/readline
-		app-shells/bash
-		sys-apps/sed
-		app-arch/xz-utils
-		sys-apps/baselayout-prefix
-		sys-devel/m4
-		sys-devel/flex
-		sys-devel/bison
-		sys-devel/patch
-		sys-devel/binutils-config
-		sys-devel/gcc-config
-		dev-libs/gmp
-		dev-libs/mpfr
-		dev-libs/mpc
-		$([[ ${CHOST} == *-aix* ]] && echo sys-apps/diffutils ) # gcc can't deal with aix diffutils, gcc PR14251
-		$([[ ${CHOST} == *-darwin* ]] && echo sys-apps/darwin-miscutils ) # gcc-apple dependency
-		$([[ ${CHOST} == *-darwin* ]] && echo sys-libs/csu ) # gcc-apple dependency
-	)
-	# Most binary Linux distributions seem to fancy toolchains that
-	# do not do c++ support (need to install a separate package).
-	USE="${USE} -cxx" \
-	emerge_pkgs --nodeps "${pkgs[@]}" || return 1
-	
-	# Build a linker and compiler that live in ${ROOT}/tmp, but
-	# produce binaries in ${ROOT}.
-	USE="${USE} -cxx" \
-	TPREFIX="${ROOT}" \
-	emerge_pkgs --nodeps "${linker}" || return 1
-	
-	EXTRA_ECONF=--disable-bootstrap \
-	GCC_MAKE_TARGET=all \
-	TPREFIX="${ROOT}" \
-	emerge_pkgs --nodeps "${compiler_stage1}" || return 1
-	
-	# make sure the EPREFIX gcc shared libraries are there
-	mkdir -p "${ROOT}"/usr/${CHOST}/lib/gcc
-	cp "${ROOT}"/tmp/usr/${CHOST}/lib/gcc/* "${ROOT}"/usr/${CHOST}/lib/gcc
+        USE="${USE} -cxx" \
+           emerge_pkgs --nodeps "${pkgs[@]}" || return 1
 
 	einfo "stage2 successfully finished"
 }
@@ -1088,75 +984,36 @@ bootstrap_stage3() {
 		eerror "emerge not found, did you bootstrap stage1?"
 		return 1
 	fi
+
+        export CONFIG_SHELL="${ROOT}"/tmp/bin/bash
 	
-	if ! type -P gcc > /dev/null ; then
-		eerror "gcc not found, did you bootstrap stage2?"
-		return 1
-	fi
-
-	configure_toolchain || return 1
-	export CONFIG_SHELL="${ROOT}"/tmp/bin/bash
-	unset CC CXX
-
 	emerge_pkgs() {
 		EPREFIX="${ROOT}" \
 		do_emerge_pkgs "$@"
 	}
 
-	# GCC sometimes decides that it needs to run makeinfo to update some
-	# info pages from .texi files.  Obviously we don't care at this
-	# stage and rather have it continue instead of abort the build
-	export MAKEINFO="echo makeinfo GNU texinfo 4.13"
-	
-	# Build a native compiler.
-	pkgs=(
-		$([[ ${CHOST} == *-aix* ]] && echo dev-libs/libiconv ) # bash dependency
-		sys-libs/ncurses
-		sys-libs/readline
-		app-shells/bash
-		sys-apps/sed
-		app-arch/xz-utils
-		sys-apps/baselayout-prefix
-		sys-devel/m4
-		sys-devel/flex
-		sys-devel/binutils-config
-		sys-devel/gcc-config
-		sys-libs/zlib
-		dev-libs/gmp
-		dev-libs/mpfr
-		dev-libs/mpc
-		$([[ ${CHOST} == *-darwin* ]] && echo sys-apps/darwin-miscutils ) # gcc-apple dependency
-		$([[ ${CHOST} == *-darwin* ]] && echo sys-libs/csu ) # gcc-apple dependency
-		"${linker}"
-		"${compiler}"
-	)
-	emerge_pkgs --nodeps "${pkgs[@]}" || return 1
-
-	# Use $ROOT tools where possible from now on.
-	rm -f "${ROOT}"/bin/sh
-	ln -s bash "${ROOT}"/bin/sh
-	export CONFIG_SHELL="${ROOT}/bin/bash"
-	export PREROOTPATH="${ROOT}/usr/bin:${ROOT}/bin"
-	unset MAKEINFO
-
 	# Build portage and dependencies.
 	pkgs=(
-		sys-apps/coreutils
-		sys-apps/findutils
-		app-arch/tar
-		sys-apps/grep
-		sys-apps/gawk
-		sys-devel/make
-		sys-libs/zlib
-		sys-apps/file
-		app-admin/eselect
-		$( [[ ${OFFLINE_MODE} ]] || echo sys-devel/gettext )
-		$( [[ ${OFFLINE_MODE} ]] || echo net-misc/wget )
-		virtual/os-headers
-		sys-apps/portage
+		app-shells/bash
 	)
 	emerge_pkgs "" "${pkgs[@]}" || return 1
 
+        # Use $ROOT tools where possible from now on.
+        rm -f "${ROOT}"/bin/sh
+        ln -s bash "${ROOT}"/bin/sh
+        export CONFIG_SHELL="${ROOT}/bin/bash"
+        export PREROOTPATH="${ROOT}/usr/bin:${ROOT}/bin"
+        unset MAKEINFO
+
+	pkgs=(
+                app-admin/eselect
+                app-admin/eselect-python
+                dev-lang/python:2.7
+                dev-lang/python:3.3
+		sys-apps/portage
+	)
+	emerge_pkgs "" "${pkgs[@]}" || return 1
+        
 	# Switch to the proper portage.
 	hash -r
 
@@ -1166,22 +1023,11 @@ bootstrap_stage3() {
 		mkdir "${ROOT}"/tmp
 	fi
 
-	# Update the portage tree.
-	treedate=$(date -f "${ROOT}"/usr/portage/metadata/timestamp +%s)
-	nowdate=$(date +%s)
-	[[ ( ! -e ${PORTDIR}/.unpacked ) && $((nowdate - (60 * 60 * 24))) -lt ${treedate} ]] || \
-	if [[ ${OFFLINE_MODE} ]]; then
-		# --keep used ${DISTDIR}, which make it easier to download a snapshot beforehand
-		emerge-webrsync --keep || return 1
-	else
-		emerge --sync || emerge-webrsync || return 1
-	fi
-
-	# Portage should figure out itself what it needs to do, if anything
-	USE="-git" emerge -u system || return 1
-
-	# remove anything that we don't need (compilers most likely)
-	emerge --depclean
+#	# Portage should figure out itself what it needs to do, if anything
+#	USE="-git" emerge -u system || return 1
+#
+#	# remove anything that we don't need (compilers most likely)
+#	emerge --depclean
 
 	einfo "stage3 successfully finished"
 }
@@ -1846,7 +1692,7 @@ EOF
 
 	hash -r  # tmp/* stuff is removed in stage3
 
-	if ! emerge -e system ; then
+	if ! true ; then
 		# emerge -e system fail
 		cat << EOF
 
