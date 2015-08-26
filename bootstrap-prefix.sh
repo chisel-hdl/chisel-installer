@@ -365,18 +365,14 @@ do_tree() {
 		efetch "$1/$2" || return 1
 		[[ -e ${PORTDIR} ]] || mkdir -p ${PORTDIR}
 		einfo "Unpacking, this may take a while"
-		bzip2 -dc ${DISTDIR}/$2 | $TAR -xf - -C ${PORTDIR} --strip-components=1 || return 1
+		gzip -dc ${DISTDIR}/$2 | $TAR -xf - -C ${PORTDIR} --strip-components=1 || return 1
 		touch ${PORTDIR}/.unpacked
 	fi
 }
 
 bootstrap_tree() {
-	local PV="20150516"
-	if [[ -n ${LATEST_TREE_YES} ]]; then
-		do_tree "${SNAPSHOT_URL}" portage-latest.tar.bz2
-	else
-		do_tree http://www.dabbelt.com/~palmer chisel-overlay-${PV}.tar.bz2
-	fi
+    local SHA="master"
+    do_tree https://github.com/chisel-hdl/chisel-overlay/tarball $SHA
 }
 
 bootstrap_startscript() {
